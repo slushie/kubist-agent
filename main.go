@@ -5,18 +5,21 @@ import (
 	k "github.com/slushie/kubist-agent/kubernetes"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-	"sync"
+	//"sync"
 	"k8s.io/client-go/tools/cache"
 	//"flag"
 	"encoding/json"
 	"bytes"
+	//"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 var Resources = []schema.GroupVersionResource{
 	{"", "v1", "pods"},
 }
 
-var Watchers = sync.WaitGroup{}
+var ch = make(chan cache.Delta)
+var Watchers = NewChannelAggregator(ch)
 
 func main() {
 	//flag.Set("logtostderr", "true")
@@ -36,28 +39,23 @@ func main() {
 		}
 
 		rw := k.NewResourceWatcher(client, gvr.Resource, "")
-		AddWatch(rw)
+		Watchers.Add(rw.Watch())
 	}
 
 	fmt.Println("watching resources...")
-	Watchers.Wait()
-	fmt.Println("done")
-}
 
-func AddWatch(watcher *k.ResourceWatcher) {
-	Watchers.Add(1)
-	go func(ch <-chan cache.Delta) {
-		defer Watchers.Done()
-		for {
-			select {
-			// TODO select on a stop channel
-			case delta := <-ch:
-				//data, _ := ToJson(delta)
-				fmt.Printf("new delta: %s %T\n",
-					delta.Type, delta.Object)
+	for {
+		select {
+		case delta := <- ch:
+			if u := delta.Object.(*unstructured.Unstructured); u != nil {
+				fmt.Printf("[%s] %s: %s/%s\n", delta.Type, u.GetKind(), u.GetNamespace(), u.GetName())
+			} else {
+				fmt.Printf("[%s] Unknown %T\n", delta.Type, delta.Object)
 			}
 		}
-	}(watcher.Watch())
+	}
+
+	fmt.Println("done")
 }
 
 func ToJson(o interface{}) ([]byte, error) {
