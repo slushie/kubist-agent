@@ -166,7 +166,61 @@ func (db *Database) Put(id string, doc BodyObject) (BodyObject, error) {
 	return db.parseResponse(res)
 }
 
+// Returns true if the database exists.
+func (db *Database) Exists() (bool, error) {
+	res, err := db.request(http.MethodHead, db.urlFor(""), nil)
+	if err != nil {
+		return false, err
+	}
+
+	status, err := db.createStatusObject(res)
+	if err != nil {
+		return false, err
+	}
+
+	return status.StatusCode == 200, nil
+}
+
+// Create the database.
+func (db *Database) Create() error {
+	res, err := db.request(http.MethodPut, db.urlFor(""), nil)
+	if err != nil {
+		return err
+	}
+
+	status, err := db.createStatusObject(res)
+	if err != nil {
+		return err
+	}
+
+	if status.StatusCode == 201 {
+		return nil // created, no error
+	}
+
+	return status
+}
+
+// Drop (delete) the database.
+func (db *Database) Drop() error {
+	res, err := db.request(http.MethodDelete, db.urlFor(""), nil)
+	if err != nil {
+		return err
+	}
+
+	status, err := db.createStatusObject(res)
+	if err != nil {
+		return err
+	}
+
+	if status.StatusCode == 200 {
+		return nil // deleted, no error
+	}
+
+	return status
+}
+
 func (db *Database) urlFor(id string) string {
+	if id == "" { return db.name }
 	return db.name + "/" + url.QueryEscape(id)
 }
 
