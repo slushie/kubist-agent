@@ -8,12 +8,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"bufio"
+	"fmt"
 )
 
 type Client struct {
 	*Auth
-	c      *http.Client
-	url    *url.URL
+	c   *http.Client
+	url *url.URL
 }
 
 type Database struct {
@@ -24,6 +25,13 @@ type Database struct {
 type Auth struct {
 	Username, Password string
 }
+
+type StatusObject struct {
+	*http.Response
+	Body BodyObject
+}
+
+var _ error = &StatusObject{}
 
 type BodyObject map[string]interface{}
 
@@ -37,7 +45,7 @@ func NewClient(baseUrl string, auth *Auth) (*Client, error) {
 }
 
 func (c *Client) Database(name string) *Database {
-	return &Database{Client:c, name:url.QueryEscape(name)}
+	return &Database{Client: c, name: url.QueryEscape(name)}
 }
 
 func (db *Database) Changes(changesCh chan<- BodyObject, stopCh <-chan struct{}) error {
@@ -55,10 +63,10 @@ func (db *Database) Changes(changesCh chan<- BodyObject, stopCh <-chan struct{})
 
 	for {
 		select {
-		case <- stopCh:
+		case <-stopCh:
 			return res.Body.Close()
 
-		case line := <- lineCh:
+		case line := <-lineCh:
 			if line == "" {
 				return nil // eof
 			}
@@ -100,19 +108,45 @@ func (db *Database) Get(id string) (BodyObject, error) {
 	return db.parseResponse(res)
 }
 
-func (db *Database) GetWithDefault(id string, def BodyObject) (BodyObject, error) {
+func (db *Database) GetOrNil(id string) (BodyObject, error) {
 	res, err := db.request(http.MethodGet, db.urlFor(id), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	if res.StatusCode == http.StatusNotFound {
-		return def, nil
+		res.Body.Close()
+		return nil, nil
 	}
 
 	return db.parseResponse(res)
 }
 
+func (db *Database) Delete(doc BodyObject) (BodyObject, error) {
+	id := doc["_id"].(string)
+	if id == "" {
+		return nil, errors.New("missing doc _id")
+	}
+
+	rev := doc["_rev"].(string)
+	if rev == "" {
+		return nil, errors.New("missing doc _rev")
+	}
+
+	req, err := db.createRequest(http.MethodDelete, db.urlFor(id), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("If-Match", rev)
+
+	res, err := db.c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return db.parseResponse(res)
+}
 
 func (db *Database) Post(doc BodyObject) (BodyObject, error) {
 	res, err := db.request(http.MethodPost, db.name, doc)
@@ -181,10 +215,30 @@ func (db *Database) authorizeRequest(req *http.Request) {
 
 	credentials := db.Auth.Username + ":" + db.Auth.Password
 	basicAuth := base64.StdEncoding.EncodeToString([]byte(credentials))
-	req.Header.Set("Authorization", "Basic " + basicAuth)
+	req.Header.Set("Authorization", "Basic "+basicAuth)
+}
+
+func (db *Database) createStatusError(res *http.Response) error {
+	if res.StatusCode < 300 {
+		return nil
+	}
+
+	body, err := db.parseJsonBody(res)
+	if err != nil { return err }
+
+	return &StatusObject{res, body}
 }
 
 func (db *Database) parseResponse(res *http.Response) (BodyObject, error) {
+	if status := db.createStatusError(res); status != nil {
+		res.Body.Close()
+		return nil, status
+	}
+
+	return db.parseJsonBody(res)
+}
+
+func (db *Database) parseJsonBody(res *http.Response) (BodyObject, error) {
 	var err error
 
 	buf := &bytes.Buffer{}
@@ -204,4 +258,8 @@ func (db *Database) parseResponse(res *http.Response) (BodyObject, error) {
 	default:
 		return nil, errors.New("invalid JSON response: " + buf.String())
 	}
+}
+
+func (so *StatusObject) Error() string {
+	return fmt.Sprintf("HTTP status %s", so.Status)
 }
