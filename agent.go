@@ -43,16 +43,16 @@ func RunAgent(db *couchdb.Database, pool dynamic.ClientPool) {
 }
 
 func applyDelta(db *couchdb.Database, delta cache.Delta) {
-	object := delta.Object.(*unstructured.Unstructured)
-	rv := object.GetResourceVersion()
+	rsrc := delta.Object.(*unstructured.Unstructured)
+	rv := rsrc.GetResourceVersion()
 
-	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(object)
+	key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(rsrc)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	id := object.GetKind() + key
-	fmt.Printf("[%s] %s rv=%s", delta.Type, id, rv)
+	id := rsrc.GetKind() + "/" + key
+	fmt.Printf("[%s] %s rv=%s\n", delta.Type, id, rv)
 
 	action := strings.ToUpper(string(delta.Type))
 	switch delta.Type {
@@ -70,16 +70,16 @@ func applyDelta(db *couchdb.Database, delta cache.Delta) {
 			break // nothing to write
 		}
 
-		object.Object["_id"] = id
-		_, err := db.Put(id, object.Object)
-		if status := err.(*couchdb.StatusObject); status != nil {
+		rsrc.Object["_id"] = id
+		_, err := db.Put(id, rsrc.Object)
+		if status, ok := err.(*couchdb.StatusObject); ok {
 			fmt.Printf("[!] ADD %s: put %s\n", id, status.Status)
 		} else if err != nil {
 			panic(err.Error())
 		}
 
 	case cache.Updated, cache.Sync:
-		put := object.DeepCopy().Object
+		put := rsrc.DeepCopy().Object
 		put["_id"] = id
 
 		if doc, err := db.GetOrNil(id); err != nil {
@@ -100,7 +100,7 @@ func applyDelta(db *couchdb.Database, delta cache.Delta) {
 		}
 
 		_, err = db.Put(id, put)
-		if status := err.(*couchdb.StatusObject); status != nil {
+		if status, ok := err.(*couchdb.StatusObject); ok {
 			fmt.Printf("[!] %s %s: put %s\n", action, id, status.Status)
 		} else if err != nil {
 			panic(err.Error())

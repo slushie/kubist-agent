@@ -9,6 +9,7 @@ import (
 	"errors"
 	"bufio"
 	"fmt"
+	"io"
 )
 
 type Client struct {
@@ -72,8 +73,7 @@ func (db *Database) Changes(changesCh chan<- BodyObject, stopCh <-chan struct{})
 			}
 
 			var obj BodyObject
-			dec := json.NewDecoder(bytes.NewBufferString(line))
-			if err := dec.Decode(obj); err != nil {
+			if err := json.Unmarshal(bytes.NewBufferString(line).Bytes(), &obj); err != nil {
 				return err
 			}
 
@@ -180,28 +180,26 @@ func (db *Database) request(method, path string, body BodyObject) (*http.Respons
 }
 
 func (db *Database) createRequest(method, path string, body BodyObject) (*http.Request, error) {
-	var serializedBody *bytes.Buffer
-	if body != nil {
-		serializedBody = &bytes.Buffer{}
-		enc := json.NewEncoder(serializedBody)
-		enc.Encode(body)
-	}
-
 	pathUrl, err := url.Parse(path)
 	if err != nil {
 		return nil, err
 	}
 	u := db.url.ResolveReference(pathUrl)
 
-	req, err := http.NewRequest(method, u.String(), serializedBody)
+	var content io.Reader = http.NoBody
+	if body != nil {
+		buf := &bytes.Buffer{}
+		enc := json.NewEncoder(buf)
+		enc.Encode(body)
+		content = buf
+	}
+
+	req, err := http.NewRequest(method, u.String(), content)
 	if err != nil {
 		return nil, err
 	}
 
-	if serializedBody != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	db.authorizeRequest(req)
 
@@ -244,17 +242,11 @@ func (db *Database) parseJsonBody(res *http.Response) (BodyObject, error) {
 		return nil, err
 	}
 
-	var body interface{}
-	dec := json.NewDecoder(buf)
-	if err = dec.Decode(body); err != nil {
+	var body BodyObject
+	if err = json.Unmarshal(buf.Bytes(), &body); err != nil {
 		return nil, err
-	}
-
-	switch obj := body.(type) {
-	case BodyObject:
-		return obj, nil
-	default:
-		return nil, errors.New("invalid JSON response: " + buf.String())
+	} else {
+		return body, nil
 	}
 }
 
