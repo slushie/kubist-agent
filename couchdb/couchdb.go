@@ -158,7 +158,16 @@ func (db *Database) Post(doc BodyObject) (BodyObject, error) {
 }
 
 func (db *Database) Put(id string, doc BodyObject) (BodyObject, error) {
-	res, err := db.request(http.MethodPut, db.urlFor(id), doc)
+	req, err := db.createRequest(http.MethodPut, db.urlFor(id), doc)
+	if err != nil {
+		return nil, err
+	}
+
+	if rev, ok := doc["_rev"].(string); ok {
+		req.Header.Set("If-Match", rev)
+	}
+
+	res, err := db.c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +187,7 @@ func (db *Database) Exists() (bool, error) {
 		return false, err
 	}
 
-	return status.StatusCode == 200, nil
+	return status.StatusCode == http.StatusOK, nil
 }
 
 // Create the database.
@@ -193,7 +202,7 @@ func (db *Database) Create() error {
 		return err
 	}
 
-	if status.StatusCode == 201 {
+	if status.StatusCode == http.StatusCreated {
 		return nil // created, no error
 	}
 
@@ -212,7 +221,7 @@ func (db *Database) Drop() error {
 		return err
 	}
 
-	if status.StatusCode == 200 {
+	if status.StatusCode == http.StatusOK {
 		return nil // deleted, no error
 	}
 
@@ -284,7 +293,7 @@ func (db *Database) parseResponse(res *http.Response) (BodyObject, error) {
 	} else if status.StatusCode >= 400 {
 		return nil, status
 	} else {
-		return db.parseJsonBody(res)
+		return status.Body, nil
 	}
 }
 
@@ -292,8 +301,10 @@ func (db *Database) parseJsonBody(res *http.Response) (BodyObject, error) {
 	var err error
 
 	buf := &bytes.Buffer{}
-	if _, err = buf.ReadFrom(res.Body); err != nil {
+	if n, err := buf.ReadFrom(res.Body); err != nil {
 		return nil, err
+	} else if n == 0 {
+		return nil, nil
 	}
 
 	var body BodyObject

@@ -5,6 +5,8 @@ import (
 	"github.com/slushie/kubist-agent/couchdb"
 	"k8s.io/client-go/dynamic"
 	"os"
+	"fmt"
+	"strings"
 )
 
 func main() {
@@ -25,7 +27,18 @@ func main() {
 		panic(err.Error())
 	}
 
-	db := cc.Database("kubist-agent/" + host)
+	name := strings.Replace("kubist/" + host, ".", "_", -1)
+	name = strings.ToLower(name)
+
+	db := cc.Database(name)
+	if exists, err := db.Exists(); err != nil {
+		panic(err.Error())
+	} else if !exists {
+		fmt.Println("[ ] Creating database at " + name)
+		if err = db.Create(); err != nil {
+			panic(err.Error())
+		}
+	}
 
 	RunAgent(db, pool)
 }
