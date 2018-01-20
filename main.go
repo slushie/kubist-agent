@@ -1,51 +1,31 @@
 package main
 
 import (
-	"fmt"
-	k "github.com/slushie/kubist-agent/kubernetes"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	"github.com/slushie/kubist-agent/kubernetes"
+	"github.com/slushie/kubist-agent/couchdb"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"os"
 )
 
-var Resources = []schema.GroupVersionResource{
-	{"", "v1", "pods"},
-}
-
-var ch = make(chan cache.Delta)
-var Watchers = NewChannelAggregator(ch)
-
 func main() {
-	config, err := k.NewClientConfig("", nil)
+	kubeConfig, err := kubernetes.NewClientConfig("", nil)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	pool := dynamic.NewDynamicClientPool(config)
+	pool := dynamic.NewDynamicClientPool(kubeConfig)
 
-	for _, gvr := range Resources {
-		client, err := pool.ClientForGroupVersionResource(gvr)
-		if  err != nil {
-			panic(err.Error())
-		}
+	cc, err := couchdb.NewClient(
+		"http://localhost:5984/",
+		&couchdb.Auth{"admin", "admin"},
+	)
 
-		rw := k.NewResourceWatcher(client, gvr.Resource, "")
-		Watchers.Add(rw.Watch())
+	host, err := os.Hostname()
+	if err != nil {
+		panic(err.Error())
 	}
 
-	fmt.Println("watching resources...")
+	db := cc.Database("kubist-agent/" + host)
 
-	for {
-		select {
-		case delta := <- ch:
-			if u := delta.Object.(*unstructured.Unstructured); u != nil {
-				fmt.Printf("[%s] %s: %s/%s\n", delta.Type, u.GetKind(), u.GetNamespace(), u.GetName())
-			} else {
-				fmt.Printf("[%s] Unknown %T\n", delta.Type, delta.Object)
-			}
-		}
-	}
-
-	fmt.Println("done")
+	RunAgent(db, pool)
 }

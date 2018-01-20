@@ -90,13 +90,13 @@ func scannerChannel(s *bufio.Scanner, ch chan<- string) {
 	close(ch)
 }
 
-func (db *Database) Head(id string) (BodyObject, error) {
+func (db *Database) Head(id string) (*StatusObject, error) {
 	res, err := db.request(http.MethodHead, db.urlFor(id), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.parseResponse(res)
+	return db.createStatusObject(res)
 }
 
 func (db *Database) Get(id string) (BodyObject, error) {
@@ -218,24 +218,22 @@ func (db *Database) authorizeRequest(req *http.Request) {
 	req.Header.Set("Authorization", "Basic "+basicAuth)
 }
 
-func (db *Database) createStatusError(res *http.Response) error {
-	if res.StatusCode < 300 {
-		return nil
-	}
-
+func (db *Database) createStatusObject(res *http.Response) (*StatusObject, error) {
 	body, err := db.parseJsonBody(res)
-	if err != nil { return err }
+	if err != nil { return nil, err }
 
-	return &StatusObject{res, body}
+	return &StatusObject{res, body}, nil
 }
 
 func (db *Database) parseResponse(res *http.Response) (BodyObject, error) {
-	if status := db.createStatusError(res); status != nil {
+	if status, err := db.createStatusObject(res); err != nil {
 		res.Body.Close()
+		return nil, err
+	} else if status.StatusCode >= 400 {
 		return nil, status
+	} else {
+		return db.parseJsonBody(res)
 	}
-
-	return db.parseJsonBody(res)
 }
 
 func (db *Database) parseJsonBody(res *http.Response) (BodyObject, error) {
