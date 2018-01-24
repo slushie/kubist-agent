@@ -7,3 +7,6 @@ import:
 - package: github.com/spf13/pflag
   version: ^1.0.0
 - package: golang.org/x/oauth2
+- package: golang.org/x/crypto
+  subpackages:
+  - ssh/terminal

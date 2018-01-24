@@ -10,6 +10,9 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/rest"
+	"golang.org/x/crypto/ssh/terminal"
+	"syscall"
+	"bufio"
 )
 
 var rootCmd = &cobra.Command{
@@ -133,6 +136,11 @@ func createCouchDbClient(cmd *cobra.Command) *couchdb.Client {
 	password, err := cmd.Flags().GetString("couchdb-password")
 	if err != nil {
 		panic(err.Error())
+	} else if username != "" && password == "" {
+		password, err = promptForPassword("CouchDB password")
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 
 	auth := &couchdb.Auth{username, password}
@@ -171,4 +179,28 @@ func createKubernetesClient(cmd *cobra.Command) dynamic.ClientPool {
 	pool := dynamic.NewDynamicClientPool(kubeConfig)
 
 	return pool
+}
+
+func promptForPassword(prompt string) (string, error) {
+	stdin := syscall.Stdin
+	if terminal.IsTerminal(stdin) {
+		os.Stdin.WriteString(prompt + ": ")
+		password, err := terminal.ReadPassword(stdin)
+		os.Stdin.WriteString("\n")
+		if err != nil {
+			return "", err
+		} else {
+			return string(password), nil
+		}
+	} else {
+		fmt.Println("[~] Not a tty. Reading " + prompt + " from stdin")
+
+		reader := bufio.NewReader(os.Stdin)
+		password, err := reader.ReadString('\n')
+		if err != nil {
+			return "", err
+		} else {
+			return password, nil
+		}
+	}
 }
