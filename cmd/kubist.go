@@ -9,18 +9,25 @@ import (
 	"github.com/slushie/kubist-agent/kubernetes"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "kubist-agent",
 	Args:  cobra.NoArgs,
-	Example: "kubist-agent --context production ",
 	Short: "Kubist Agent reflects Kubernetes resources to CouchDB",
 	Long: `Kubist Agent reflects Kubernetes resources to CouchDB.
 
 This daemon can run in-cluster or on your workstation. Because it 
 inherits most global flags from kubectl, all of the agent's Kubernetes 
 server configuration can be done through command-line flags.
+`,
+	Example: `  kubist-agent --context minikube
+Connect to the "minikube" context in your ~/.kube/config file.
+
+  kubist-agent --in-cluster --couchdb-url http://couchdb.kubist:5984/
+Connect to Kubernetes from a Pod within the cluster, and to the CouchDB 
+service in the "kubist" namespace of the current cluster.
 `,
 	Run: execute,
 }
@@ -41,6 +48,13 @@ func init() {
 		"f",
 		"",
 		"Path to your Kubeconfig [KUBECONFIG]",
+	)
+
+	rootCmd.Flags().BoolP(
+		"in-cluster",
+		"C",
+		false,
+		"Look for in-cluster configuration. Does not load a kubeconfig",
 	)
 
 	rootCmd.Flags().StringP(
@@ -131,17 +145,27 @@ func createCouchDbClient(cmd *cobra.Command) *couchdb.Client {
 }
 
 func createKubernetesClient(cmd *cobra.Command) dynamic.ClientPool {
-	var path string
+	var kubeConfig *rest.Config
 
-	if flag := cmd.Flag("kubeconfig"); flag.Changed {
-		path = flag.Value.String()
-	} else if env, exists := os.LookupEnv("KUBECONFIG"); exists {
-		path = env
-	}
+	if inCluster, err := cmd.Flags().GetBool("in-cluster"); err != nil {
+		panic("in-cluster: " + err.Error())
+	} else if inCluster {
+		kubeConfig, err = rest.InClusterConfig()
+		if err != nil {
+			panic("in-cluster config: " + err.Error())
+		}
+	} else {
+		var path string
+		if flag := cmd.Flag("kubeconfig"); flag.Changed {
+			path = flag.Value.String()
+		} else if env, exists := os.LookupEnv("KUBECONFIG"); exists {
+			path = env
+		}
 
-	kubeConfig, err := kubernetes.NewClientConfig(path, overrides)
-	if err != nil {
-		panic(err.Error())
+		kubeConfig, err = kubernetes.NewClientConfig(path, overrides)
+		if err != nil {
+			panic(err.Error())
+		}
 	}
 
 	pool := dynamic.NewDynamicClientPool(kubeConfig)
