@@ -14,10 +14,14 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "kubist-agent",
 	Args:  cobra.NoArgs,
-	Short: "Kubist reflects Kubernetes resources to CouchDB",
-	Long: `Kubist reflects Kubernetes resources to CouchDB.
+	Example: "kubist-agent --context production ",
+	Short: "Kubist Agent reflects Kubernetes resources to CouchDB",
+	Long: `Kubist Agent reflects Kubernetes resources to CouchDB.
 
-This daemon can run in-cluster or on your workstation.`,
+This daemon can run in-cluster or on your workstation. Because it 
+inherits most global flags from kubectl, all of the agent's Kubernetes 
+server configuration can be done through command-line flags.
+`,
 	Run: execute,
 }
 
@@ -94,6 +98,7 @@ func execute(cmd *cobra.Command, _ []string) {
 		}
 	}
 
+	fmt.Printf("[+] Reflecting to DB %#v\n", name)
 	RunAgent(db, pool)
 }
 
