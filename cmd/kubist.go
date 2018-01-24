@@ -122,8 +122,8 @@ func execute(cmd *cobra.Command, _ []string) {
 func createCouchDbClient(cmd *cobra.Command) *couchdb.Client {
 	var url = DefaultCouchDbUrl
 
-	if flag := cmd.Flag("couchdb-url"); flag.Changed {
-		url = flag.Value.String()
+	if urlFlag := cmd.Flag("couchdb-url"); urlFlag.Changed {
+		url = urlFlag.Value.String()
 	} else if env, exists := os.LookupEnv("COUCHDB_URL"); exists {
 		url = env
 	}
@@ -133,10 +133,10 @@ func createCouchDbClient(cmd *cobra.Command) *couchdb.Client {
 		panic(err.Error())
 	}
 
-	password, err := cmd.Flags().GetString("couchdb-password")
-	if err != nil {
-		panic(err.Error())
-	} else if username != "" && password == "" {
+	var password string
+	if pwFlag := cmd.Flag("couchdb-password"); pwFlag.Changed {
+		password = pwFlag.Value.String()
+	} else if username != "" {
 		password, err = promptForPassword("CouchDB password")
 		if err != nil {
 			panic(err.Error())
