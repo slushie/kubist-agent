@@ -26,6 +26,12 @@ var rootCmd = &cobra.Command{
 This daemon can run in-cluster or on your workstation. Because it 
 inherits most global flags from kubectl, all of the agent's Kubernetes 
 server configuration can be done through command-line flags.
+
+Environment variables and configuration files may be used to configure 
+this daemon. Environment variables are noted in the --help output below,
+but generally follow the pattern --some-option => SOME_OPTION. Configuration
+is read from kubist.json in the current directory, ~/.config, or /etc/kubist,
+in that order.
 `,
 	Example: `  kubist-agent --context minikube
 Connect to the "minikube" context in your ~/.kube/config file.

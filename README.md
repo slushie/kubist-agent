@@ -12,17 +12,31 @@ This daemon can run in-cluster or on your workstation. Because it
 inherits most global flags from kubectl, all of the agent's Kubernetes
 server configuration can be done through command-line flags.
 
+Environment variables and configuration files may be used to configure
+this daemon. Environment variables are noted in the --help output below,
+but generally follow the pattern --some-option => SOME_OPTION. Configuration
+is read from kubist.json in the current directory, ~/.config, or /etc/kubist,
+in that order.
+
 Usage:
   kubist-agent [flags]
 
 Examples:
-kubist-agent --context production
+  kubist-agent --context minikube
+Connect to the "minikube" context in your ~/.kube/config file.
+
+  kubist-agent --in-cluster --couchdb-url http://couchdb.kubist:5984/
+Connect to Kubernetes from a Pod within the cluster, and to the CouchDB
+service in the "kubist" namespace of the current cluster.
+
 
 Flags:
   -P, --couchdb-password string             Password for CouchDB authentication [COUCHDB_PASSWORD]
-  -u, --couchdb-url string                  Base URL for CouchDB [COUCHDB_URL] (default "http://localhost:5984/")
+  -p, --couchdb-read-password               Read CouchDB password from stdin
+  -u, --couchdb-url string                  Base URL for CouchDB [COUCHDB_URL] (default "http://localhost:5984")
   -U, --couchdb-username string             Username for CouchDB authentication [COUCHDB_USERNAME]
   -h, --help                                help for kubist-agent
+  -C, --in-cluster                          Look for in-cluster configuration. Does not load a kubeconfig
       --kube-as string                      Username to impersonate for the operation
       --kube-as-group stringArray           Group to impersonate for the operation, this flag can be repeated to specify multiple groups.
       --kube-certificate-authority string   Path to a cert file for the certificate authority
@@ -39,4 +53,5 @@ Flags:
       --kube-user string                    The name of the kubeconfig user to use
       --kube-username string                Username for basic authentication to the API server
   -f, --kubeconfig string                   Path to your Kubeconfig [KUBECONFIG]
+      --recreate-database                   Drop and recreate the CouchDB database. WARNING: This may break replication
 ```
