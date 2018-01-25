@@ -1,9 +1,9 @@
 package kubernetes
 
 import (
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/rest"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 func NewClientConfig(path string, overrides *clientcmd.ConfigOverrides) (*rest.Config, error) {

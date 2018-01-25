@@ -1,15 +1,15 @@
 package couchdb
 
 import (
-	"net/http"
-	"bytes"
-	"encoding/json"
-	"net/url"
-	"encoding/base64"
-	"errors"
 	"bufio"
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 )
 
 type Client struct {
@@ -229,7 +229,9 @@ func (db *Database) Drop() error {
 }
 
 func (db *Database) urlFor(id string) string {
-	if id == "" { return db.name }
+	if id == "" {
+		return db.name
+	}
 	return db.name + "/" + url.QueryEscape(id)
 }
 
@@ -281,7 +283,9 @@ func (db *Database) authorizeRequest(req *http.Request) {
 
 func (db *Database) createStatusObject(res *http.Response) (*StatusObject, error) {
 	body, err := db.parseJsonBody(res)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	return &StatusObject{res, body}, nil
 }

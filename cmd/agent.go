@@ -2,14 +2,14 @@ package cmd
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"github.com/slushie/kubist-agent/couchdb"
-	"k8s.io/client-go/dynamic"
 	"github.com/slushie/kubist-agent/kubernetes"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 var ch = make(chan cache.Delta)
@@ -18,7 +18,7 @@ var Watchers = NewChannelAggregator(ch)
 func RunAgent(db *couchdb.Database, pool dynamic.ClientPool, resources []schema.GroupVersionResource) {
 	for _, gvr := range resources {
 		client, err := pool.ClientForGroupVersionResource(gvr)
-		if  err != nil {
+		if err != nil {
 			panic(err.Error())
 		}
 
@@ -28,7 +28,7 @@ func RunAgent(db *couchdb.Database, pool dynamic.ClientPool, resources []schema.
 
 	for {
 		select {
-		case delta := <- ch:
+		case delta := <-ch:
 			applyDelta(db, delta)
 		}
 	}

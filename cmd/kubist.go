@@ -1,20 +1,20 @@
 package cmd
 
 import (
-	"k8s.io/client-go/dynamic"
-	"github.com/slushie/kubist-agent/couchdb"
-	"os"
-	"strings"
+	"bufio"
 	"fmt"
+	"github.com/slushie/kubist-agent/couchdb"
 	"github.com/slushie/kubist-agent/kubernetes"
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/rest"
-	"golang.org/x/crypto/ssh/terminal"
-	"syscall"
-	"bufio"
 	"github.com/spf13/viper"
+	"golang.org/x/crypto/ssh/terminal"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"os"
+	"strings"
+	"syscall"
 )
 
 var rootCmd = &cobra.Command{
@@ -89,6 +89,13 @@ func init() {
 		"Password for CouchDB authentication [COUCHDB_PASSWORD]",
 	)
 
+	rootCmd.Flags().BoolP(
+		"couchdb-read-password",
+		"p",
+		false,
+		"Read CouchDB password from stdin",
+	)
+
 	// import kubernetes flags
 	flagNames := clientcmd.RecommendedConfigOverrideFlags("kube-")
 	clientcmd.BindOverrideFlags(
@@ -112,16 +119,16 @@ func loadConfig() {
 
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
+}
 
+func execute(cmd *cobra.Command, _ []string) {
 	err := viper.ReadInConfig()
 	if err == nil {
 		fmt.Println("[~] Read config from " + viper.ConfigFileUsed())
 	} else if _, notFound := err.(viper.ConfigFileNotFoundError); !notFound {
 		panic("reading config: " + err.Error())
 	}
-}
 
-func execute(cmd *cobra.Command, _ []string) {
 	pool := createKubernetesClient(cmd)
 	cc := createCouchDbClient(cmd)
 
@@ -137,7 +144,7 @@ func execute(cmd *cobra.Command, _ []string) {
 	if exists, err := db.Exists(); err != nil {
 		panic(err.Error())
 	} else if !exists {
-		fmt.Println("[~] Creating database at " + name)
+		fmt.Println("[+] Creating database at " + name)
 		if err = db.Create(); err != nil {
 			panic(err.Error())
 		}
@@ -149,14 +156,12 @@ func execute(cmd *cobra.Command, _ []string) {
 	RunAgent(db, pool, resources)
 }
 
-func createCouchDbClient(cmd *cobra.Command) *couchdb.Client {
+func createCouchDbClient(_ *cobra.Command) *couchdb.Client {
 	url := viper.GetString("couchdb-url")
 	username := viper.GetString("couchdb-username")
+	password := viper.GetString("couchdb-password")
 
-	var password string
-	if viper.IsSet("couchdb-password") {
-		password = viper.GetString("couchdb-password")
-	} else if username != "" {
+	if viper.GetBool("couchdb-read-password") {
 		var err error
 		password, err = promptForPassword("CouchDB password")
 		if err != nil {
@@ -173,24 +178,19 @@ func createCouchDbClient(cmd *cobra.Command) *couchdb.Client {
 	return cc
 }
 
-func createKubernetesClient(cmd *cobra.Command) dynamic.ClientPool {
-	var kubeConfig *rest.Config
+func createKubernetesClient(_ *cobra.Command) dynamic.ClientPool {
+	var (
+		err        error
+		kubeConfig *rest.Config
+	)
 
-	if inCluster, err := cmd.Flags().GetBool("in-cluster"); err != nil {
-		panic("in-cluster: " + err.Error())
-	} else if inCluster {
+	if viper.GetBool("in-cluster") {
 		kubeConfig, err = rest.InClusterConfig()
 		if err != nil {
 			panic("in-cluster config: " + err.Error())
 		}
 	} else {
-		var path string
-		if flag := cmd.Flag("kubeconfig"); flag.Changed {
-			path = flag.Value.String()
-		} else if env, exists := os.LookupEnv("KUBECONFIG"); exists {
-			path = env
-		}
-
+		path := viper.GetString("kubeconfig")
 		kubeConfig, err = kubernetes.NewClientConfig(path, overrides)
 		if err != nil {
 			panic(err.Error())

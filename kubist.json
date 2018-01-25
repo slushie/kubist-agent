@@ -1,0 +1,9 @@
+{
+  "couchdb-username": "admin",
+  "namespace": "ui",
+  "append": false,
+  "resources": [
+    {"Version": "v1", "Resource": "pods"},
+    {"Version": "v1", "Resource": "services"}
+  ]
+}
