@@ -18,14 +18,36 @@ type Client struct {
 	url *url.URL
 }
 
+type Auth struct {
+	Username, Password string
+}
+
+type ClientInterface interface {
+	Database(name string) DatabaseInterface
+}
+
+var _ ClientInterface = &Client{}
+
 type Database struct {
 	*Client
 	name string
 }
 
-type Auth struct {
-	Username, Password string
+type DatabaseInterface interface {
+	Exists() (bool, error)
+	Create() error
+	Drop() error
+	Changes(changesCh chan<- BodyObject, stopCh <-chan struct{}) error
+
+	Head(id string) (*StatusObject, error)
+	Get(id string) (BodyObject, error)
+	GetOrNil(id string) (BodyObject, error)
+	Delete(doc BodyObject) (BodyObject, error)
+	Post(doc BodyObject) (BodyObject, error)
+	Put(id string, doc BodyObject) (BodyObject, error)
 }
+
+var _ DatabaseInterface = &Database{}
 
 type StatusObject struct {
 	*http.Response
@@ -45,7 +67,7 @@ func NewClient(baseUrl string, auth *Auth) (*Client, error) {
 	return &Client{Auth: auth, c: &http.Client{}, url: base}, nil
 }
 
-func (c *Client) Database(name string) *Database {
+func (c *Client) Database(name string) DatabaseInterface {
 	return &Database{Client: c, name: url.QueryEscape(name)}
 }
 

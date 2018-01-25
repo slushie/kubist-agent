@@ -14,7 +14,7 @@ import (
 
 type KubistAgent struct {
 	ch        chan cache.Delta
-	db        *couchdb.Database
+	db        couchdb.DatabaseInterface
 	pool      dynamic.ClientPool
 	Resources []schema.GroupVersionResource
 	Namespace string
@@ -23,7 +23,7 @@ type KubistAgent struct {
 }
 
 func NewKubistAgent(
-	db *couchdb.Database,
+	db couchdb.DatabaseInterface,
 	pool dynamic.ClientPool,
 	resources []schema.GroupVersionResource,
 	namespace string,
