@@ -1,9 +1,9 @@
 {
   "couchdb-username": "admin",
-  "namespace": "ui",
+  "kube-namespace": "ui",
   "append": false,
   "resources": [
-    {"Version": "v1", "Resource": "pods"},
-    {"Version": "v1", "Resource": "services"}
+    {"version": "v1", "resource": "pods"},
+    {"version": "v1", "resource": "services"}
   ]
 }

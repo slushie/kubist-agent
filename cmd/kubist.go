@@ -150,10 +150,33 @@ func execute(cmd *cobra.Command, _ []string) {
 		}
 	}
 
-	resources := viper.Get("resources").([]schema.GroupVersionResource)
+	resources := make([]schema.GroupVersionResource, 0, 10)
 
-	fmt.Printf("[+] Reflecting %#v to DB %#v\n", resources, name)
-	RunAgent(db, pool, resources)
+	for _, in := range viper.Get("resources").([]interface{}) {
+		r := in.(map[string]interface{})
+		// group can be nil for core resources
+		var group string
+		if g, exists := r["group"]; exists {
+			group = g.(string)
+		}
+
+		gvr := schema.GroupVersionResource{
+			Group: group,
+			Version: r["version"].(string),
+			Resource: r["resource"].(string),
+		}
+		resources = append(resources, gvr)
+	}
+
+	namespace := viper.GetString("kube-namespace")
+
+	nsDesc := "namespace " + namespace
+	if namespace == "" { nsDesc = "all namespaces" }
+	fmt.Printf("[+] Reflecting %+v in %s to database %#v\n",
+		resources, nsDesc, name)
+
+	agent := NewKubistAgent(db, pool, resources, namespace)
+	agent.Run()
 }
 
 func createCouchDbClient(_ *cobra.Command) *couchdb.Client {
@@ -205,7 +228,7 @@ func createKubernetesClient(_ *cobra.Command) dynamic.ClientPool {
 func promptForPassword(prompt string) (string, error) {
 	stdin := syscall.Stdin
 	if terminal.IsTerminal(stdin) {
-		os.Stdin.WriteString(prompt + ": ")
+		os.Stdin.WriteString("[?] " + prompt + ": ")
 		password, err := terminal.ReadPassword(stdin)
 		os.Stdin.WriteString("\n")
 		if err != nil {
@@ -214,7 +237,7 @@ func promptForPassword(prompt string) (string, error) {
 			return string(password), nil
 		}
 	} else {
-		fmt.Println("[~] Not a tty. Reading " + prompt + " from stdin")
+		fmt.Println("[?] Not a tty. Reading " + prompt + " from stdin")
 
 		reader := bufio.NewReader(os.Stdin)
 		password, err := reader.ReadString('\n')

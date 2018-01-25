@@ -12,31 +12,56 @@ import (
 	"strings"
 )
 
-var ch = make(chan cache.Delta)
-var Watchers = NewChannelAggregator(ch)
+type KubistAgent struct {
+	ch        chan cache.Delta
+	db        *couchdb.Database
+	pool      dynamic.ClientPool
+	Resources []schema.GroupVersionResource
+	Namespace string
 
-func RunAgent(db *couchdb.Database, pool dynamic.ClientPool, resources []schema.GroupVersionResource) {
-	for _, gvr := range resources {
-		client, err := pool.ClientForGroupVersionResource(gvr)
+	Watchers *ChannelAggregator
+}
+
+func NewKubistAgent(
+	db *couchdb.Database,
+	pool dynamic.ClientPool,
+	resources []schema.GroupVersionResource,
+	namespace string,
+) *KubistAgent {
+	var ch = make(chan cache.Delta)
+
+	return &KubistAgent{
+		ch:        ch,
+		db:        db,
+		pool:      pool,
+		Resources: resources,
+		Namespace: namespace,
+		Watchers:  NewChannelAggregator(ch),
+	}
+}
+
+func (ka *KubistAgent) Run() {
+	for _, gvr := range ka.Resources {
+		client, err := ka.pool.ClientForGroupVersionResource(gvr)
 		if err != nil {
 			panic(err.Error())
 		}
 
-		rw := kubernetes.NewResourceWatcher(client, gvr.Resource, "")
-		Watchers.Add(rw.Watch())
+		rw := kubernetes.NewResourceWatcher(client, gvr.Resource, ka.Namespace)
+		ka.Watchers.Add(rw.Watch())
 	}
 
 	for {
 		select {
-		case delta := <-ch:
-			applyDelta(db, delta)
+		case delta := <-ka.ch:
+			ka.applyDelta(delta)
 		}
 	}
 
 	fmt.Println("bye felicia")
 }
 
-func applyDelta(db *couchdb.Database, delta cache.Delta) {
+func (ka *KubistAgent) applyDelta(delta cache.Delta) {
 	rsrc := delta.Object.(*unstructured.Unstructured)
 	rv := rsrc.GetResourceVersion()
 
@@ -51,7 +76,7 @@ func applyDelta(db *couchdb.Database, delta cache.Delta) {
 	action := strings.ToUpper(string(delta.Type))
 	switch delta.Type {
 	case cache.Added:
-		if doc, err := db.GetOrNil(id); err != nil {
+		if doc, err := ka.db.GetOrNil(id); err != nil {
 			panic(err.Error())
 		} else if doc != nil {
 			docObject := &unstructured.Unstructured{Object: doc}
@@ -65,7 +90,7 @@ func applyDelta(db *couchdb.Database, delta cache.Delta) {
 		}
 
 		rsrc.Object["_id"] = id
-		_, err := db.Put(id, rsrc.Object)
+		_, err := ka.db.Put(id, rsrc.Object)
 		if status, ok := err.(*couchdb.StatusObject); ok {
 			fmt.Printf("[!] ADD %s: put %s\n", id, status.Status)
 		} else if err != nil {
@@ -76,7 +101,7 @@ func applyDelta(db *couchdb.Database, delta cache.Delta) {
 		put := rsrc.DeepCopy().Object
 		put["_id"] = id
 
-		if doc, err := db.GetOrNil(id); err != nil {
+		if doc, err := ka.db.GetOrNil(id); err != nil {
 			panic(err.Error())
 		} else if doc == nil {
 			fmt.Printf("[~] %s %s: new document\n", action, id)
@@ -93,7 +118,7 @@ func applyDelta(db *couchdb.Database, delta cache.Delta) {
 			}
 		}
 
-		_, err = db.Put(id, put)
+		_, err = ka.db.Put(id, put)
 		if status, ok := err.(*couchdb.StatusObject); ok {
 			fmt.Printf("[!] %s %s: put %s\n", action, id, status.Status)
 		} else if err != nil {
@@ -101,10 +126,10 @@ func applyDelta(db *couchdb.Database, delta cache.Delta) {
 		}
 
 	case cache.Deleted:
-		if doc, err := db.GetOrNil(id); err != nil {
+		if doc, err := ka.db.GetOrNil(id); err != nil {
 			panic(err.Error())
 		} else if doc != nil {
-			if _, err := db.Delete(doc); err != nil {
+			if _, err := ka.db.Delete(doc); err != nil {
 				fmt.Printf("[!] DELETE %s: %s\n", id, err.Error())
 			}
 		}
