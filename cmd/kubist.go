@@ -13,6 +13,8 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"syscall"
 	"bufio"
+	"github.com/spf13/viper"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 var rootCmd = &cobra.Command{
@@ -36,7 +38,11 @@ service in the "kubist" namespace of the current cluster.
 }
 
 var overrides = &clientcmd.ConfigOverrides{}
+
 var DefaultCouchDbUrl = "http://localhost:5984"
+var DefaultResources = []schema.GroupVersionResource{
+	{"", "v1", "pods"},
+}
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
@@ -46,6 +52,8 @@ func Execute() {
 }
 
 func init() {
+	cobra.OnInitialize(loadConfig)
+
 	rootCmd.Flags().StringP(
 		"kubeconfig",
 		"f",
@@ -63,34 +71,54 @@ func init() {
 	rootCmd.Flags().StringP(
 		"couchdb-url",
 		"u",
-		"http://localhost:5984/",
+		DefaultCouchDbUrl,
 		"Base URL for CouchDB [COUCHDB_URL]",
 	)
 
 	rootCmd.Flags().StringP(
 		"couchdb-username",
 		"U",
-		os.Getenv("COUCHDB_USERNAME"),
+		"",
 		"Username for CouchDB authentication [COUCHDB_USERNAME]",
 	)
 
 	rootCmd.Flags().StringP(
 		"couchdb-password",
 		"P",
-		os.Getenv("COUCHDB_PASSWORD"),
+		"",
 		"Password for CouchDB authentication [COUCHDB_PASSWORD]",
 	)
 
-	initKubernetesOverrides()
-}
-
-func initKubernetesOverrides() {
+	// import kubernetes flags
 	flagNames := clientcmd.RecommendedConfigOverrideFlags("kube-")
 	clientcmd.BindOverrideFlags(
 		overrides,
 		rootCmd.Flags(),
 		flagNames,
 	)
+
+	viper.SetDefault("resources", DefaultResources)
+}
+
+func loadConfig() {
+	viper.SetConfigName("kubist")
+	viper.AddConfigPath("/etc/kubist")
+	viper.AddConfigPath("$HOME/.config")
+	viper.AddConfigPath(".")
+
+	if err := viper.BindPFlags(rootCmd.Flags()); err != nil {
+		panic("binding flags: " + err.Error())
+	}
+
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
+
+	err := viper.ReadInConfig()
+	if err == nil {
+		fmt.Println("[~] Read config from " + viper.ConfigFileUsed())
+	} else if _, notFound := err.(viper.ConfigFileNotFoundError); !notFound {
+		panic("reading config: " + err.Error())
+	}
 }
 
 func execute(cmd *cobra.Command, _ []string) {
@@ -109,34 +137,27 @@ func execute(cmd *cobra.Command, _ []string) {
 	if exists, err := db.Exists(); err != nil {
 		panic(err.Error())
 	} else if !exists {
-		fmt.Println("[ ] Creating database at " + name)
+		fmt.Println("[~] Creating database at " + name)
 		if err = db.Create(); err != nil {
 			panic(err.Error())
 		}
 	}
 
-	fmt.Printf("[+] Reflecting to DB %#v\n", name)
-	RunAgent(db, pool)
+	resources := viper.Get("resources").([]schema.GroupVersionResource)
+
+	fmt.Printf("[+] Reflecting %#v to DB %#v\n", resources, name)
+	RunAgent(db, pool, resources)
 }
 
 func createCouchDbClient(cmd *cobra.Command) *couchdb.Client {
-	var url = DefaultCouchDbUrl
-
-	if urlFlag := cmd.Flag("couchdb-url"); urlFlag.Changed {
-		url = urlFlag.Value.String()
-	} else if env, exists := os.LookupEnv("COUCHDB_URL"); exists {
-		url = env
-	}
-
-	username, err := cmd.Flags().GetString("couchdb-username")
-	if err != nil {
-		panic(err.Error())
-	}
+	url := viper.GetString("couchdb-url")
+	username := viper.GetString("couchdb-username")
 
 	var password string
-	if pwFlag := cmd.Flag("couchdb-password"); pwFlag.Changed {
-		password = pwFlag.Value.String()
+	if viper.IsSet("couchdb-password") {
+		password = viper.GetString("couchdb-password")
 	} else if username != "" {
+		var err error
 		password, err = promptForPassword("CouchDB password")
 		if err != nil {
 			panic(err.Error())

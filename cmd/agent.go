@@ -12,15 +12,11 @@ import (
 	"strconv"
 )
 
-var Resources = []schema.GroupVersionResource{
-	{"", "v1", "pods"},
-}
-
 var ch = make(chan cache.Delta)
 var Watchers = NewChannelAggregator(ch)
 
-func RunAgent(db *couchdb.Database, pool dynamic.ClientPool) {
-	for _, gvr := range Resources {
+func RunAgent(db *couchdb.Database, pool dynamic.ClientPool, resources []schema.GroupVersionResource) {
+	for _, gvr := range resources {
 		client, err := pool.ClientForGroupVersionResource(gvr)
 		if  err != nil {
 			panic(err.Error())
@@ -29,8 +25,6 @@ func RunAgent(db *couchdb.Database, pool dynamic.ClientPool) {
 		rw := kubernetes.NewResourceWatcher(client, gvr.Resource, "")
 		Watchers.Add(rw.Watch())
 	}
-
-	fmt.Println("watching resources...")
 
 	for {
 		select {
@@ -111,7 +105,7 @@ func applyDelta(db *couchdb.Database, delta cache.Delta) {
 			panic(err.Error())
 		} else if doc != nil {
 			if _, err := db.Delete(doc); err != nil {
-				fmt.Printf("DELETE %s: %s\n", id, err.Error())
+				fmt.Printf("[!] DELETE %s: %s\n", id, err.Error())
 			}
 		}
 
