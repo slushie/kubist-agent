@@ -40,8 +40,8 @@ service in the "kubist" namespace of the current cluster.
 var overrides = &clientcmd.ConfigOverrides{}
 
 var DefaultCouchDbUrl = "http://localhost:5984"
-var DefaultResources = []schema.GroupVersionResource{
-	{"", "v1", "pods"},
+var DefaultResources = []map[string]interface{} {
+	{"group": "", "version": "v1", "resource": "pods"},
 }
 
 func Execute() {
