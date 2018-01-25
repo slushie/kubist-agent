@@ -54,6 +54,16 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(loadConfig)
 
+	// only overridden from the config file
+	viper.SetDefault("resources", DefaultResources)
+
+	rootCmd.Flags().Bool(
+		"recreate-database",
+		false,
+		"Drop and recreate the CouchDB database. " +
+			"WARNING: This may break replication",
+	)
+
 	rootCmd.Flags().StringP(
 		"kubeconfig",
 		"f",
@@ -103,8 +113,6 @@ func init() {
 		rootCmd.Flags(),
 		flagNames,
 	)
-
-	viper.SetDefault("resources", DefaultResources)
 }
 
 func loadConfig() {
@@ -141,10 +149,20 @@ func execute(cmd *cobra.Command, _ []string) {
 	name = strings.ToLower(name)
 
 	db := cc.Database(name)
-	if exists, err := db.Exists(); err != nil {
+
+	var exists bool
+	recreateDatabase := viper.GetBool("recreate-database")
+	if exists, err = db.Exists(); err != nil {
 		panic(err.Error())
-	} else if !exists {
-		fmt.Println("[+] Creating database at " + name)
+	} else if exists && recreateDatabase {
+		fmt.Println("[+] Dropping database " + name)
+		if err = db.Drop(); err != nil {
+			panic(err.Error())
+		}
+	}
+
+	if !exists || recreateDatabase {
+		fmt.Println("[+] Creating database " + name)
 		if err = db.Create(); err != nil {
 			panic(err.Error())
 		}
