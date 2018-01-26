@@ -79,7 +79,7 @@ func (ka *KubistAgent) applyDelta(delta cache.Delta) {
 		if doc, err := ka.db.GetOrNil(id); err != nil {
 			panic(err.Error())
 		} else if doc != nil {
-			docObject := &unstructured.Unstructured{Object: doc}
+			docObject := &unstructured.Unstructured{Object: doc.Body}
 			docRv := docObject.GetResourceVersion()
 			if docRv != rv {
 				fmt.Printf("[!] ADD %s: conflict resourceVersion %#v != %#v\n", id, rv, docRv)
@@ -106,9 +106,9 @@ func (ka *KubistAgent) applyDelta(delta cache.Delta) {
 		} else if doc == nil {
 			fmt.Printf("[~] %s %s: new document\n", action, id)
 		} else {
-			put["_rev"] = doc["_rev"]
+			put["_rev"] = doc.Body["_rev"]
 
-			docObject := &unstructured.Unstructured{Object: doc}
+			docObject := &unstructured.Unstructured{Object: doc.Body}
 			docRv := docObject.GetResourceVersion()
 			if parseRv(rv) < parseRv(docRv) {
 				fmt.Printf("[!] %s %s: conflict resourceVersion %#v < %#v\n", action, id, rv, docRv)
@@ -129,7 +129,7 @@ func (ka *KubistAgent) applyDelta(delta cache.Delta) {
 		if doc, err := ka.db.GetOrNil(id); err != nil {
 			panic(err.Error())
 		} else if doc != nil {
-			if _, err := ka.db.Delete(doc); err != nil {
+			if _, err := ka.db.Delete(doc.Body); err != nil {
 				fmt.Printf("[!] DELETE %s: %s\n", id, err.Error())
 			}
 		}

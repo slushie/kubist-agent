@@ -37,26 +37,26 @@ type DatabaseInterface interface {
 	Exists() (bool, error)
 	Create() error
 	Drop() error
-	Changes(changesCh chan<- BodyObject, stopCh <-chan struct{}) error
+	Changes(changesCh chan<- Body, stopCh <-chan struct{}) error
 
 	Head(id string) (*StatusObject, error)
-	Get(id string) (BodyObject, error)
-	GetOrNil(id string) (BodyObject, error)
-	Delete(doc BodyObject) (BodyObject, error)
-	Post(doc BodyObject) (BodyObject, error)
-	Put(id string, doc BodyObject) (BodyObject, error)
+	Get(id string) (*StatusObject, error)
+	GetOrNil(id string) (*StatusObject, error)
+	Delete(doc Body) (*StatusObject, error)
+	Post(doc Body) (*StatusObject, error)
+	Put(id string, doc Body) (*StatusObject, error)
 }
 
 var _ DatabaseInterface = &Database{}
 
 type StatusObject struct {
 	*http.Response
-	Body BodyObject
+	Body
 }
 
 var _ error = &StatusObject{}
 
-type BodyObject map[string]interface{}
+type Body map[string]interface{}
 
 func NewClient(baseUrl string, auth *Auth) (*Client, error) {
 	base, err := url.Parse(baseUrl)
@@ -64,14 +64,26 @@ func NewClient(baseUrl string, auth *Auth) (*Client, error) {
 		return nil, err
 	}
 
+	if base.Path == "" {
+		base.Path = "/"
+	}
+
 	return &Client{Auth: auth, c: &http.Client{}, url: base}, nil
+}
+
+func (c *Client) Info() (*StatusObject, error) {
+	if res, err := c.request(http.MethodGet, "", nil); err != nil {
+		return nil, err
+	} else {
+		return c.createStatusObject(res)
+	}
 }
 
 func (c *Client) Database(name string) DatabaseInterface {
 	return &Database{Client: c, name: url.QueryEscape(name)}
 }
 
-func (db *Database) Changes(changesCh chan<- BodyObject, stopCh <-chan struct{}) error {
+func (db *Database) Changes(changesCh chan<- Body, stopCh <-chan struct{}) error {
 	defer close(changesCh)
 
 	res, err := db.request(http.MethodGet, db.urlFor("_changes"), nil)
@@ -94,7 +106,7 @@ func (db *Database) Changes(changesCh chan<- BodyObject, stopCh <-chan struct{})
 				return nil // eof
 			}
 
-			var obj BodyObject
+			var obj Body
 			if err := json.Unmarshal(bytes.NewBufferString(line).Bytes(), &obj); err != nil {
 				return err
 			}
@@ -121,7 +133,7 @@ func (db *Database) Head(id string) (*StatusObject, error) {
 	return db.createStatusObject(res)
 }
 
-func (db *Database) Get(id string) (BodyObject, error) {
+func (db *Database) Get(id string) (*StatusObject, error) {
 	res, err := db.request(http.MethodGet, db.urlFor(id), nil)
 	if err != nil {
 		return nil, err
@@ -130,7 +142,7 @@ func (db *Database) Get(id string) (BodyObject, error) {
 	return db.parseResponse(res)
 }
 
-func (db *Database) GetOrNil(id string) (BodyObject, error) {
+func (db *Database) GetOrNil(id string) (*StatusObject, error) {
 	res, err := db.request(http.MethodGet, db.urlFor(id), nil)
 	if err != nil {
 		return nil, err
@@ -144,7 +156,7 @@ func (db *Database) GetOrNil(id string) (BodyObject, error) {
 	return db.parseResponse(res)
 }
 
-func (db *Database) Delete(doc BodyObject) (BodyObject, error) {
+func (db *Database) Delete(doc Body) (*StatusObject, error) {
 	id := doc["_id"].(string)
 	if id == "" {
 		return nil, errors.New("missing doc _id")
@@ -170,7 +182,7 @@ func (db *Database) Delete(doc BodyObject) (BodyObject, error) {
 	return db.parseResponse(res)
 }
 
-func (db *Database) Post(doc BodyObject) (BodyObject, error) {
+func (db *Database) Post(doc Body) (*StatusObject, error) {
 	res, err := db.request(http.MethodPost, db.name, doc)
 	if err != nil {
 		return nil, err
@@ -179,7 +191,7 @@ func (db *Database) Post(doc BodyObject) (BodyObject, error) {
 	return db.parseResponse(res)
 }
 
-func (db *Database) Put(id string, doc BodyObject) (BodyObject, error) {
+func (db *Database) Put(id string, doc Body) (*StatusObject, error) {
 	req, err := db.createRequest(http.MethodPut, db.urlFor(id), doc)
 	if err != nil {
 		return nil, err
@@ -257,21 +269,21 @@ func (db *Database) urlFor(id string) string {
 	return db.name + "/" + url.QueryEscape(id)
 }
 
-func (db *Database) request(method, path string, body BodyObject) (*http.Response, error) {
-	req, err := db.createRequest(method, path, nil)
+func (c *Client) request(method, path string, body Body) (*http.Response, error) {
+	req, err := c.createRequest(method, path, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.c.Do(req)
+	return c.c.Do(req)
 }
 
-func (db *Database) createRequest(method, path string, body BodyObject) (*http.Request, error) {
+func (c *Client) createRequest(method, path string, body Body) (*http.Request, error) {
 	pathUrl, err := url.Parse(path)
 	if err != nil {
 		return nil, err
 	}
-	u := db.url.ResolveReference(pathUrl)
+	u := c.url.ResolveReference(pathUrl)
 
 	var content io.Reader = http.NoBody
 	if body != nil {
@@ -288,23 +300,23 @@ func (db *Database) createRequest(method, path string, body BodyObject) (*http.R
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	db.authorizeRequest(req)
+	c.authorizeRequest(req)
 
 	return req, nil
 }
 
-func (db *Database) authorizeRequest(req *http.Request) {
-	if db.Auth == nil {
+func (c *Client) authorizeRequest(req *http.Request) {
+	if c.Auth == nil {
 		return
 	}
 
-	credentials := db.Auth.Username + ":" + db.Auth.Password
+	credentials := c.Auth.Username + ":" + c.Auth.Password
 	basicAuth := base64.StdEncoding.EncodeToString([]byte(credentials))
 	req.Header.Set("Authorization", "Basic "+basicAuth)
 }
 
-func (db *Database) createStatusObject(res *http.Response) (*StatusObject, error) {
-	body, err := db.parseJsonBody(res)
+func (c *Client) createStatusObject(res *http.Response) (*StatusObject, error) {
+	body, err := c.parseJsonBody(res)
 	if err != nil {
 		return nil, err
 	}
@@ -312,18 +324,18 @@ func (db *Database) createStatusObject(res *http.Response) (*StatusObject, error
 	return &StatusObject{res, body}, nil
 }
 
-func (db *Database) parseResponse(res *http.Response) (BodyObject, error) {
-	if status, err := db.createStatusObject(res); err != nil {
+func (c *Client) parseResponse(res *http.Response) (*StatusObject, error) {
+	if status, err := c.createStatusObject(res); err != nil {
 		res.Body.Close()
 		return nil, err
 	} else if status.StatusCode >= 400 {
 		return nil, status
 	} else {
-		return status.Body, nil
+		return status, nil
 	}
 }
 
-func (db *Database) parseJsonBody(res *http.Response) (BodyObject, error) {
+func (*Client) parseJsonBody(res *http.Response) (Body, error) {
 	var err error
 
 	buf := &bytes.Buffer{}
@@ -333,7 +345,7 @@ func (db *Database) parseJsonBody(res *http.Response) (BodyObject, error) {
 		return nil, nil
 	}
 
-	var body BodyObject
+	var body Body
 	if err = json.Unmarshal(buf.Bytes(), &body); err != nil {
 		return nil, err
 	} else {
