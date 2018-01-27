@@ -174,10 +174,23 @@ func execute(cmd *cobra.Command, _ []string) {
 		}
 	}
 
-	resources := make([]schema.GroupVersionResource, 0, 10)
+	// parse unknown json objects as a slice of maps
+	var rawResources []map[string]interface{}
+	switch o := viper.Get("resources").(type) {
+	case []map[string]interface{}:
+		rawResources = o
+	case []interface{}: // forced to copy
+		rawResources = make([]map[string]interface{}, len(o))
+		for _, in := range o {
+			r := in.(map[string]interface{})
+			rawResources = append(rawResources, r)
+		}
+	default:
+		panic(fmt.Sprintf("resources: can't parse from %T\n", o))
+	}
 
-	for _, in := range viper.Get("resources").([]interface{}) {
-		r := in.(map[string]interface{})
+	resources := make([]schema.GroupVersionResource, 0, 10)
+	for _, r := range rawResources {
 		// group can be nil for core resources
 		var group string
 		if g, exists := r["group"]; exists {
