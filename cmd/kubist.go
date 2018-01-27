@@ -181,9 +181,12 @@ func execute(cmd *cobra.Command, _ []string) {
 		rawResources = o
 	case []interface{}: // forced to copy
 		rawResources = make([]map[string]interface{}, len(o))
-		for _, in := range o {
-			r := in.(map[string]interface{})
-			rawResources = append(rawResources, r)
+		for i, in := range o {
+			if r, ok := in.(map[string]interface{}); !ok {
+				panic(fmt.Sprintf("resources[%d]: not an object\n", i))
+			} else {
+				rawResources[i] = r
+			}
 		}
 	default:
 		panic(fmt.Sprintf("resources: can't parse from %T\n", o))
