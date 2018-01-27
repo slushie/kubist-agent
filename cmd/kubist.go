@@ -46,7 +46,7 @@ service in the "kubist" namespace of the current cluster.
 var overrides = &clientcmd.ConfigOverrides{}
 
 var DefaultCouchDbUrl = "http://localhost:5984"
-var DefaultResources = []map[string]interface{} {
+var DefaultResources = []map[string]interface{}{
 	{"group": "", "version": "v1", "resource": "pods"},
 }
 
@@ -66,7 +66,7 @@ func init() {
 	rootCmd.Flags().Bool(
 		"recreate-database",
 		false,
-		"Drop and recreate the CouchDB database. " +
+		"Drop and recreate the CouchDB database. "+
 			"WARNING: This may break replication",
 	)
 
@@ -185,8 +185,8 @@ func execute(cmd *cobra.Command, _ []string) {
 		}
 
 		gvr := schema.GroupVersionResource{
-			Group: group,
-			Version: r["version"].(string),
+			Group:    group,
+			Version:  r["version"].(string),
 			Resource: r["resource"].(string),
 		}
 		resources = append(resources, gvr)
@@ -195,7 +195,9 @@ func execute(cmd *cobra.Command, _ []string) {
 	namespace := viper.GetString("kube-namespace")
 
 	nsDesc := "namespace " + namespace
-	if namespace == "" { nsDesc = "all namespaces" }
+	if namespace == "" {
+		nsDesc = "all namespaces"
+	}
 	fmt.Printf("[+] Reflecting %+v in %s to database %#v\n",
 		resources, nsDesc, name)
 
@@ -234,13 +236,14 @@ func createKubernetesClient(_ *cobra.Command) dynamic.ClientPool {
 	if viper.GetBool("in-cluster") {
 		kubeConfig, err = rest.InClusterConfig()
 		if err != nil {
-			panic("in-cluster config: " + err.Error())
+			panic("in-cluster config failed: " + err.Error())
 		}
 	} else {
 		path := viper.GetString("kubeconfig")
 		kubeConfig, err = kubernetes.NewClientConfig(path, overrides)
 		if err != nil {
-			panic(err.Error())
+			panic(fmt.Sprintf("kubeconfig %#v failed: %s",
+				path, err.Error()))
 		}
 	}
 
