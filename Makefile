@@ -8,11 +8,16 @@ clean: ## Trash binary files
 	@echo "--> cleaning..."
 	@go clean || (echo "Unable to clean project" && exit 1)
 	@rm -rf $(GOPATH)/bin/$(BINARY_NAME) 2> /dev/null
+	@rm -rf build/
 	@echo "Clean OK"
 
 test: ## Run all tests
 	@echo "--> testing..."
 	@go test -v $(PACKAGE)/...
+
+glide: ## Fetch dependencies via glide up
+	@echo "--> fetching dependencies..."
+	@glide install
 
 install: clean ## Compile sources and build binary
 	@echo "--> installing..."
@@ -22,6 +27,18 @@ install: clean ## Compile sources and build binary
 run: install ## Run your application
 	@echo "--> running application..."
 	@$(GOPATH)/bin/$(BINARY_NAME)
+
+linux: build/linux/$(BINARY_NAME) ## Build cross-compiled binaries for Linux
+
+build/%/$(BINARY_NAME):
+	@echo "--> building for $*..."
+	@GOOS=$* go build -o $@
+	@echo "Build OK"
+
+docker: glide linux _docker ## Build a Docker image
+_docker:
+	@echo "--> installing for docker"
+	@docker build -t $(BINARY_NAME) .
 
 usage: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
