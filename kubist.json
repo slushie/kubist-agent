@@ -1,6 +1,5 @@
 {
   "couchdb-username": "admin",
-  "kube-namespace": "ui",
   "resources": [
     {"version": "v1", "resource": "pods"},
     {"version": "v1", "resource": "services"}
