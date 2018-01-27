@@ -31,15 +31,21 @@ var (
 func setupAuthServer() tearDownFunc {
 	srv := httptest.NewServer(
 		http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-			validCreds := base64.StdEncoding.EncodeToString(
-				[]byte(TestUsername + ":" + TestPassword),
-			)
+			var validCreds, givenCreds string
 
 			TestRequest = req
+			emptyCreds := TestUsername == "" && TestPassword == ""
+
+			if !emptyCreds {
+				validCreds = base64.StdEncoding.EncodeToString(
+					[]byte(TestUsername + ":" + TestPassword),
+				)
+			}
 
 			auth, hasAuth := req.Header["Authorization"]
-			authType, creds := parseAuth(auth[0])
-			if !hasAuth || authType != "basic" || creds != validCreds {
+			if hasAuth { _, givenCreds = parseAuth(auth[0]) }
+
+			if (emptyCreds && hasAuth) || (givenCreds != validCreds){
 				res.WriteHeader(http.StatusUnauthorized)
 			} else {
 				res.WriteHeader(TestResponseStatus)
@@ -77,6 +83,36 @@ func TestClientAuth(t *testing.T) {
 		{&Auth{"bad-username", "bad-password"}, 401},
 		{&Auth{TestUsername, TestPassword}, 200},
 	}
+
+	for _, tc := range testClientAuth {
+		c, err := NewClient(TestUrl, tc.auth)
+		if err != nil {
+			t.Fatal(err)
+		} else if status, err := c.Info(); err != nil {
+			t.Fatal(err)
+		} else {
+			assert.Equal(t, status.StatusCode, tc.status,
+				fmt.Sprintf("login with %+v", tc.auth))
+		}
+	}
+}
+
+
+
+func TestEmptyClientAuth(t *testing.T) {
+	var testClientAuth = []struct {
+		auth   *Auth
+		status int
+	}{
+		{&Auth{"bad-username", "bad-password"}, 401},
+		{&Auth{}, 200},
+	}
+
+	oldUsername, oldPassword := TestUsername, TestPassword
+	TestUsername, TestPassword = "", ""
+	defer func() {
+		TestUsername, TestPassword = oldUsername, oldPassword
+	}()
 
 	for _, tc := range testClientAuth {
 		c, err := NewClient(TestUrl, tc.auth)

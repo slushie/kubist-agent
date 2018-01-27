@@ -306,7 +306,7 @@ func (c *Client) createRequest(method, path string, body Body) (*http.Request, e
 }
 
 func (c *Client) authorizeRequest(req *http.Request) {
-	if c.Auth == nil {
+	if c.Auth.Username == "" && c.Auth.Password == "" {
 		return
 	}
 
