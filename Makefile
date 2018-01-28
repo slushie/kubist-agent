@@ -1,6 +1,7 @@
 # VARIABLES
 PACKAGE="github.com/slushie/kubist-agent"
 BINARY_NAME="kubist-agent"
+DOCKER_REPO="slushie/kubist-agent"
 
 default: usage
 
@@ -39,6 +40,11 @@ docker: glide linux _docker ## Build a Docker image
 _docker:
 	@echo "--> installing for docker"
 	@docker build -t $(BINARY_NAME) .
+
+docker-publish: ## Publish Docker image
+	@echo "--> publishing to $(DOCKER_REPO)..."
+	@docker tag $(BINARY_NAME) $(DOCKER_REPO)
+	@docker push $(DOCKER_REPO)
 
 usage: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
