@@ -11,6 +11,7 @@ services:
       COUCHDB_URL: http://couchdb:5984/
       COUCHDB_USERNAME: admin
       COUCHDB_PASSWORD: admin
+    command: sh -c 'sleep 5 && kubist-agent'
 
   couchdb:
     image: couchdb:latest
