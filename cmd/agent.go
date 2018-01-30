@@ -20,7 +20,10 @@ type KubistAgent struct {
 	Namespace string
 
 	Watchers *ChannelAggregator
+	PoolSize int
 }
+
+var DefaultPoolSize = 10
 
 func NewKubistAgent(
 	db couchdb.DatabaseInterface,
@@ -37,6 +40,7 @@ func NewKubistAgent(
 		Resources: resources,
 		Namespace: namespace,
 		Watchers:  NewChannelAggregator(ch),
+		PoolSize:  DefaultPoolSize,
 	}
 }
 
@@ -51,14 +55,19 @@ func (ka *KubistAgent) Run() {
 		ka.Watchers.Add(rw.Watch())
 	}
 
-	for {
-		select {
-		case delta := <-ka.ch:
-			go ka.applyDelta(delta)
-		}
+	for i := 0; i < ka.PoolSize; i += 1 {
+		go func () {
+            for delta := range ka.ch {
+                ka.applyDelta(delta)
+            }
+		}()
 	}
 
 	fmt.Println("bye felicia")
+}
+
+func (ka *KubistAgent) Stop() {
+    ka.Watchers.Stop()
 }
 
 func (ka *KubistAgent) applyDelta(delta cache.Delta) {

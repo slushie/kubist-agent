@@ -29,6 +29,7 @@ func (ca *ChannelAggregator) Add(ch <-chan cache.Delta) error {
 		for {
 			select {
 			case <-ca.stop:
+			    close(ca.out)
 				return
 			case v := <-ch:
 				ca.out <- v
