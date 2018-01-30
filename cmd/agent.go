@@ -54,7 +54,7 @@ func (ka *KubistAgent) Run() {
 	for {
 		select {
 		case delta := <-ka.ch:
-			ka.applyDelta(delta)
+			go ka.applyDelta(delta)
 		}
 	}
 
