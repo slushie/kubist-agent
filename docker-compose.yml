@@ -1,0 +1,23 @@
+version: '2'
+services:
+  kubist-agent:
+    build: .
+    image: kubist-agent
+    depends_on:
+    - couchdb
+    volumes:
+    - $HOME:/root
+    environment:
+      COUCHDB_URL: http://couchdb:5984/
+      COUCHDB_USERNAME: admin
+      COUCHDB_PASSWORD: admin
+
+  couchdb:
+    image: couchdb:latest
+    ports:
+    - "5984:5984"
+    volumes:
+    - ./testdata/couchdb:/opt/couchdb
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin

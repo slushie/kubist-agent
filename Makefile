@@ -36,8 +36,7 @@ build/%/$(BINARY_NAME):
 	@GOOS=$* go build -o $@
 	@echo "Build OK"
 
-docker: glide linux _docker ## Build a Docker image
-_docker:
+docker: glide linux ## Build a Docker image
 	@echo "--> installing for docker"
 	@docker build -t $(BINARY_NAME) .
 
