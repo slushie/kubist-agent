@@ -63,6 +63,8 @@ func (ka *KubistAgent) Run() {
 		}()
 	}
 
+	ka.Watchers.Wait()
+
 	fmt.Println("bye felicia")
 }
 
