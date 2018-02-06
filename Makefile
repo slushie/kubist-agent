@@ -29,14 +29,7 @@ run: install ## Run your application
 	@echo "--> running application..."
 	@$(GOPATH)/bin/$(BINARY_NAME)
 
-linux: build/linux/$(BINARY_NAME) ## Build cross-compiled binaries for Linux
-
-build/%/$(BINARY_NAME):
-	@echo "--> building for $*..."
-	@GOOS=$* go build -o $@
-	@echo "Build OK"
-
-docker: glide linux ## Build a Docker image
+docker: ## Build a Docker image
 	@echo "--> installing for docker"
 	@docker build -t $(BINARY_NAME) .
 
