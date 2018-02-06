@@ -29,7 +29,7 @@ run: install ## Run your application
 	@echo "--> running application..."
 	@$(GOPATH)/bin/$(BINARY_NAME)
 
-docker: ## Build a Docker image
+docker: glide ## Build a Docker image
 	@echo "--> installing for docker"
 	@docker build -t $(BINARY_NAME) .
 
